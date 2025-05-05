@@ -8,15 +8,15 @@ import { eq } from "drizzle-orm";
 
 import { db } from "@/db";
 import { sessionMiddleware } from "@/lib/session-middleware";
-import { users } from "@/db/schema/user";
 import { AUTH_COOKIE } from "../constants/constant";
 import { insertUserSchema, selectUserSchema } from "@/zod-schemas/users-schema";
+import { user } from "@/db/schema/schema";
 
 const app = new Hono()
   .get("/current", sessionMiddleware, async (c) => {
     const userId = c.get("userId") as string;
-    const user = await db.select().from(users).where(eq(users.id, userId));
-    if (user.length === 0) {
+    const userFound = await db.select().from(user).where(eq(user.id, userId));
+    if (userFound.length === 0) {
       return c.json({ data: [] });
     }
     return c.json({ data: user });
@@ -25,15 +25,21 @@ const app = new Hono()
     const { email, password } = c.req.valid("json");
     console.log("email", email, "password", password);
     try {
-      const user = await db.select().from(users).where(eq(users.email, email));
+      const userFound = await db
+        .select()
+        .from(user)
+        .where(eq(user.email, email));
       console.log("user", user);
-      if (user.length === 0) {
+      if (userFound.length === 0) {
         return c.json(
           { error: "Unauthorized", message: "User not found" },
           401
         );
       }
-      const isPasswordValid = await bcrypt.compare(password!, user[0].password);
+      const isPasswordValid = await bcrypt.compare(
+        password!,
+        userFound[0].password
+      );
       if (!isPasswordValid) {
         return c.json(
           { error: "Unauthorized", message: "Incorrect password" },
@@ -41,7 +47,7 @@ const app = new Hono()
         );
       }
       const token = jwt.sign(
-        { email, id: user[0].id },
+        { email, id: userFound[0].id },
         process.env.JWT_SECRET! as string,
         {
           expiresIn: "7d",
@@ -68,7 +74,7 @@ const app = new Hono()
     const hashedPassword = await bcrypt.hash(password, 10);
     try {
       const [createdUser] = await db
-        .insert(users)
+        .insert(user)
         .values({ name, email, password: hashedPassword })
         .returning();
       return c.json({ data: createdUser });

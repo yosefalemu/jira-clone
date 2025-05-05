@@ -1,7 +1,4 @@
 import { db } from "@/db";
-import { member } from "@/db/schema/member";
-import { task } from "@/db/schema/task";
-import { users } from "@/db/schema/user";
 import { sessionMiddleware } from "@/lib/session-middleware";
 import { insertTaskSchema } from "@/zod-schemas/task-schema";
 import { zValidator } from "@hono/zod-validator";
@@ -9,6 +6,7 @@ import { and, eq, asc, desc, inArray } from "drizzle-orm";
 import { Hono } from "hono";
 import { z } from "zod";
 import { TaskStatus } from "../constant/types";
+import { task, user, projectMember } from "@/db/schema/schema";
 
 const app = new Hono()
   .get(
@@ -33,32 +31,35 @@ const app = new Hono()
         const { workspaceId, assigneedId, projectId, status, search, dueDate } =
           c.req.valid("query");
 
-        // Verify workspace membership
-        const memberFound = await db
+        // Verify workspace projectMembership
+        const projectMemberFound = await db
           .select()
-          .from(member)
+          .from(projectMember)
           .where(
-            and(eq(member.userId, userId), eq(member.workspaceId, workspaceId))
+            and(
+              eq(projectMember.userId, userId),
+              eq(projectMember.projectId, workspaceId)
+            )
           );
 
-        if (memberFound.length === 0) {
+        if (projectMemberFound.length === 0) {
           return c.json(
             {
               error: "Unauthorized",
-              message: "You are not a member of this workspace",
+              message: "You are not a projectMember of this workspace",
             },
             401
           );
         }
         // Build query conditions
-        const conditions = [eq(task.workspaceId, workspaceId)];
+        const conditions = [eq(task.projectId, workspaceId)];
 
         if (projectId) {
           conditions.push(eq(task.projectId, projectId));
         }
 
         if (assigneedId) {
-          conditions.push(eq(task.assignedId, assigneedId));
+          conditions.push(eq(task.assignedTo, assigneedId));
         }
 
         if (status) {
@@ -88,15 +89,15 @@ const app = new Hono()
 
         // Extract unique assigned user IDs
         const assignedUserIds = tasks
-          .map((t) => t.assignedId)
+          .map((t) => t.assignedTo)
           .filter((id) => id !== null) as string[];
 
         // Fetch users for the assigned IDs
         const assignedUsers = assignedUserIds.length
           ? await db
               .select()
-              .from(users)
-              .where(inArray(users.id, assignedUserIds))
+              .from(user)
+              .where(inArray(user.id, assignedUserIds))
           : [];
 
         // Create a lookup object for quick access
@@ -105,7 +106,7 @@ const app = new Hono()
         // Map assigned users to their respective tasks
         const tasksWithAssignedUsers = tasks.map((t) => ({
           ...t,
-          assignedUser: t.assignedId ? userMap[t.assignedId] || null : null,
+          assignedUser: t.assignedTo ? userMap[t.assignedTo] || null : null,
         }));
 
         return c.json({ data: tasksWithAssignedUsers }, 200);
@@ -137,19 +138,22 @@ const app = new Hono()
       } = c.req.valid("json");
 
       try {
-        // Check if the user is a member of the workspace
-        const foundMember = await db
+        // Check if the user is a projectMember of the workspace
+        const foundprojectMember = await db
           .select()
-          .from(member)
+          .from(projectMember)
           .where(
-            and(eq(member.userId, userId), eq(member.workspaceId, workspaceId))
+            and(
+              eq(projectMember.userId, userId),
+              eq(projectMember.projectId, workspaceId)
+            )
           );
 
-        if (foundMember.length === 0) {
+        if (foundprojectMember.length === 0) {
           return c.json(
             {
               error: "Unauthorized",
-              message: "You are not a member of this workspace",
+              message: "You are not a projectMember of this workspace",
             },
             401
           );
@@ -161,7 +165,7 @@ const app = new Hono()
           .from(task)
           .where(
             and(
-              eq(task.workspaceId, workspaceId),
+              eq(task.projectId, workspaceId),
               eq(task.projectId, projectId),
               eq(
                 task.status,
@@ -186,12 +190,11 @@ const app = new Hono()
           .values({
             name,
             description,
-            workspaceId,
             projectId,
             assignedId,
             dueDate,
             status: status || "BACKLOG",
-            position: newPosition.toString(),
+            position: newPosition,
           })
           .returning();
 
@@ -248,7 +251,7 @@ const app = new Hono()
               tasks.map((t) => t.id)
             )
           );
-        const workspaceIds = new Set(tasksToUpdate.map((t) => t.workspaceId));
+        const workspaceIds = new Set(tasksToUpdate.map((t) => t.projectId));
         if (workspaceIds.size !== 1) {
           return c.json(
             {
@@ -259,20 +262,20 @@ const app = new Hono()
           );
         }
         const workspaceId = workspaceIds.values().next().value as string;
-        const memberFound = await db
+        const projectMemberFound = await db
           .select()
-          .from(member)
+          .from(projectMember)
           .where(
             and(
-              eq(member.userId, c.get("userId") as string),
-              eq(member.workspaceId, workspaceId)
+              eq(projectMember.userId, c.get("userId") as string),
+              eq(projectMember.projectId, workspaceId)
             )
           );
-        if (memberFound.length === 0) {
+        if (projectMemberFound.length === 0) {
           return c.json(
             {
               error: "Unauthorized",
-              message: "You are not a member of this workspace",
+              message: "You are not a projectMember of this workspace",
             },
             401
           );
@@ -283,7 +286,7 @@ const app = new Hono()
             await db
               .update(task)
               .set({
-                position: position.toString(),
+                position: position,
                 status,
               })
               .where(eq(task.id, id));

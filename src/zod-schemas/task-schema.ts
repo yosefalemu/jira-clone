@@ -1,4 +1,4 @@
-import { task } from "@/db/schema/task";
+import { task } from "@/db/schema/schema";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -21,9 +21,8 @@ export const insertTaskSchema = createInsertSchema(task, {
       .nonempty("Description is required")
       .min(20, "Please provide a detailed description of the workspace")
       .max(500, "Description must be at most 500 characters"),
-  workspaceId: (schema) => schema.uuid("Invalid uuid format"),
   projectId: (schema) => schema.uuid("Invalid uuid format"),
-  assignedId: (schema) => schema.uuid("Invalid uuid format"),
+  assignedTo: (schema) => schema.uuid("Invalid uuid format"),
   status: () => statusEnum.optional(),
   dueDate: () => z.coerce.date(),
 });

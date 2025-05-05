@@ -1,6 +1,5 @@
 import { db } from "@/db";
-import { member } from "@/db/schema/member";
-import { project } from "@/db/schema/project";
+import { project, workspaceMember } from "@/db/schema/schema";
 import { sessionMiddleware } from "@/lib/session-middleware";
 import { createProjectSchema } from "@/zod-schemas/project-schema";
 import { zValidator } from "@hono/zod-validator";
@@ -90,13 +89,16 @@ const app = new Hono()
       } else {
         uploadedImage = image || "";
       }
-      const membersFound = await db
+      const workspaceMembersFound = await db
         .select()
-        .from(member)
+        .from(workspaceMember)
         .where(
-          and(eq(member.workspaceId, workspaceId), eq(member.userId, userId))
+          and(
+            eq(workspaceMember.workspaceId, workspaceId),
+            eq(workspaceMember.userId, userId)
+          )
         );
-      if (membersFound.length === 0) {
+      if (workspaceMembersFound.length === 0) {
         return c.json(
           {
             error: "Unauthorized",
@@ -113,6 +115,8 @@ const app = new Hono()
             description,
             workspaceId,
             image: uploadedImage,
+            creatorId: userId,
+            inviteCode: Math.random().toString(36).substring(2, 8),
           })
           .returning();
         return c.json({ data: newProject }, 200);

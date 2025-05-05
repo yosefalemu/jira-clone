@@ -1,4 +1,4 @@
-import { project } from "@/db/schema/project";
+import { project } from "@/db/schema/schema";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 

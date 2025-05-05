@@ -1,6 +1,5 @@
 import { db } from "@/db";
-import { member } from "@/db/schema/member";
-import { users } from "@/db/schema/user";
+import { user, workspaceMember } from "@/db/schema/schema";
 import { sessionMiddleware } from "@/lib/session-middleware";
 import { insertMemberSchema } from "@/zod-schemas/member-schema";
 import { selectUserType } from "@/zod-schemas/users-schema";
@@ -20,8 +19,8 @@ const app = new Hono()
 
         const members = await db
           .select()
-          .from(member)
-          .where(eq(member.workspaceId, workspaceId));
+          .from(workspaceMember)
+          .where(eq(workspaceMember.workspaceId, workspaceId));
 
         if (!members.length) {
           return c.json(
@@ -38,11 +37,11 @@ const app = new Hono()
           userRole: member.role,
         }));
         const usersFound: selectUserType[] = await db
-          .select({ id: users.id, name: users.name, email: users.email })
-          .from(users)
+          .select({ id: user.id, name: user.name, email: user.email })
+          .from(user)
           .where(
             inArray(
-              users.id,
+              user.id,
               userInMember.map((member) => member.userId)
             )
           );
@@ -100,11 +99,11 @@ const app = new Hono()
         const userId = c.get("userId") as string;
         const membersFound = await db
           .select()
-          .from(member)
+          .from(workspaceMember)
           .where(
             and(
-              eq(member.userId, memberId),
-              eq(member.workspaceId, workspaceId)
+              eq(workspaceMember.userId, memberId),
+              eq(workspaceMember.workspaceId, workspaceId)
             )
           );
         if (membersFound.length === 0) {
@@ -118,9 +117,12 @@ const app = new Hono()
         }
         const currentLoggedInUserInWorkspace = await db
           .select()
-          .from(member)
+          .from(workspaceMember)
           .where(
-            and(eq(member.userId, userId), eq(member.workspaceId, workspaceId))
+            and(
+              eq(workspaceMember.userId, userId),
+              eq(workspaceMember.workspaceId, workspaceId)
+            )
           );
         if (currentLoggedInUserInWorkspace[0].role !== "admin") {
           return c.json(
@@ -141,9 +143,9 @@ const app = new Hono()
           );
         }
         await db
-          .update(member)
+          .update(workspaceMember)
           .set({ role })
-          .where(eq(member.userId, memberId));
+          .where(eq(workspaceMember.userId, memberId));
         return c.json({ message: "Role updated successfully" }, 200);
       } catch (error) {
         console.error("Error updating role:", error);

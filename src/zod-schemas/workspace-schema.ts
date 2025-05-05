@@ -1,8 +1,8 @@
-import { workSpaces } from "@/db/schema/workspace";
+import { workspace } from "@/db/schema/schema";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
-export const createWorkspaceSchema = createInsertSchema(workSpaces, {
+export const createWorkspaceSchema = createInsertSchema(workspace, {
   id: (schema) => schema.uuid("Invalid uuid format").optional(),
   name: (schema) =>
     schema
@@ -14,7 +14,7 @@ export const createWorkspaceSchema = createInsertSchema(workSpaces, {
       .nonempty("Description is required")
       .min(20, "Please provide a detailed description of the workspace")
       .max(500, "Description must be at most 500 characters"),
-  createdBy: (schema) => schema.uuid("Invalid uuid format").optional(),
+  creatorId: (schema) => schema.uuid("Invalid uuid format").optional(),
   inviteCode: (schema) => schema.optional(),
   image: (schema) =>
     schema
